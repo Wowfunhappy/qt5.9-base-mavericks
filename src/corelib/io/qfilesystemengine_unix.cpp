@@ -126,7 +126,7 @@ static bool isPackage(const QFileSystemMetaData &data, const QFileSystemEntry &e
 
 #ifdef Q_OS_MACOS
         // Find if an application other than Finder claims to know how to handle the package
-        QCFType<CFURLRef> application = LSCopyDefaultApplicationURLForURL(url,
+        /*QCFType<CFURLRef> application = LSCopyDefaultApplicationURLForURL(url,
             kLSRolesEditor | kLSRolesViewer, nullptr);
 
         if (application) {
@@ -135,7 +135,7 @@ static bool isPackage(const QFileSystemMetaData &data, const QFileSystemEntry &e
             QString applicationId = QString::fromCFString(identifier);
             if (applicationId != QLatin1String("com.apple.finder"))
                 return true;
-        }
+        }*/
 #endif
     }
 
