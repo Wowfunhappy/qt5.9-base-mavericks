@@ -324,7 +324,7 @@ static void qt_closePopups()
 
 + (void)applicationActivationChanged:(NSNotification*)notification
 {
-    const id sender = self;
+    /*const id sender = self;
     NSEnumerator<NSWindow*> *windowEnumerator = nullptr;
     NSApplication *application = [NSApplication sharedApplication];
 
@@ -384,7 +384,7 @@ static void qt_closePopups()
         // end up triggering a bug in AppKit where the tool windows would disappear behind
         // the application window.
         [window orderFront:sender];
-    }
+    }*/
 }
 
 - (id)initWithContentRect:(NSRect)contentRect
@@ -2181,7 +2181,7 @@ void QCocoaWindow::applyContentBorderThickness(NSWindow *window)
     if (!m_drawContentBorderGradient) {
         [window setStyleMask:[window styleMask] & ~NSTexturedBackgroundWindowMask];
         [[[window contentView] superview] setNeedsDisplay:YES];
-        window.titlebarAppearsTransparent = NO;
+        //window.titlebarAppearsTransparent = NO;
         return;
     }
 
@@ -2206,7 +2206,7 @@ void QCocoaWindow::applyContentBorderThickness(NSWindow *window)
     int effectiveBottomContentBorderThickness = m_bottomContentBorderThickness;
 
     [window setStyleMask:[window styleMask] | NSTexturedBackgroundWindowMask];
-    window.titlebarAppearsTransparent = YES;
+    //window.titlebarAppearsTransparent = YES;
 
     [window setContentBorderThickness:effectiveTopContentBorderThickness forEdge:NSMaxYEdge];
     [window setAutorecalculatesContentBorderThickness:NO forEdge:NSMaxYEdge];

@@ -147,7 +147,10 @@ QPixmap qt_mac_toQPixmap(const NSImage *image, const QSizeF &size)
     QMacCGContext ctx(&pixmap);
     if (!ctx)
         return QPixmap();
-    NSGraphicsContext *gc = [NSGraphicsContext graphicsContextWithCGContext:ctx flipped:YES];
+    
+    //NSGraphicsContext *gc = [NSGraphicsContext graphicsContextWithCGContext:ctx flipped:YES];
+    NSGraphicsContext *gc = [NSGraphicsContext graphicsContextWithGraphicsPort:ctx flipped:YES];
+    
     if (!gc)
         return QPixmap();
     [NSGraphicsContext saveGraphicsState];
