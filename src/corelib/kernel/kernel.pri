@@ -121,8 +121,8 @@ mac {
 
     osx: LIBS_PRIVATE += -framework CoreServices -framework AppKit
 
-    ios|tvos {
-        # We need UIKit for UIApplication in qeventdispatcher_cf.mm
+    uikit {
+        # We need UIKit for UIDevice
         LIBS_PRIVATE += -framework UIKit
     }
 
