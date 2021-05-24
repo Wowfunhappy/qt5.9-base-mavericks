@@ -84,7 +84,6 @@
 #include <qtoolbutton.h>
 #include <qtreeview.h>
 #include <qtableview.h>
-#include <qoperatingsystemversion.h>
 #include <qwizard.h>
 #include <qdebug.h>
 #include <qlibrary.h>
@@ -1313,7 +1312,7 @@ void QMacStylePrivate::initComboboxBdi(const QStyleOptionComboBox *combo, HIThem
         bdi->adornment = kThemeAdornmentFocus;
     if (combo->activeSubControls & QStyle::SC_ComboBoxArrow)
         bdi->state = kThemeStatePressed;
-    else if (tds == kThemeStateInactive && QOperatingSystemVersion::current() < QOperatingSystemVersion::OSXYosemite)
+    else if (tds == kThemeStateInactive && QSysInfo::MacintoshVersion < QSysInfo::MV_10_10)
         bdi->state = kThemeStateActive;
     else
         bdi->state = tds;
@@ -1635,7 +1634,7 @@ void QMacStylePrivate::getSliderInfo(QStyle::ComplexControl cc, const QStyleOpti
     || slider->tickPosition == QSlider::TicksBothSides;
     
     tdi->bounds = qt_hirectForQRect(slider->rect);
-    if (isScrollbar || QOperatingSystemVersion::current() < QOperatingSystemVersion::OSXYosemite) {
+    if (isScrollbar || QSysInfo::MacintoshVersion < QSysInfo::MV_10_10) {
         tdi->min = slider->minimum;
         tdi->max = slider->maximum;
         tdi->value = slider->sliderPosition;
@@ -1947,7 +1946,7 @@ void QMacStylePrivate::drawColorlessButton(const HIRect &macRect, HIThemeButtonD
     const bool button = opt->type == QStyleOption::SO_Button;
     const bool viewItem = opt->type == QStyleOption::SO_ViewItem;
     const bool pressed = bdi->state == kThemeStatePressed;
-    const bool usingYosemiteOrLater = QOperatingSystemVersion::current() >= QOperatingSystemVersion::OSXYosemite;
+    const bool usingYosemiteOrLater = QSysInfo::MacintoshVersion >= QSysInfo::MV_10_10;
     
     if (button && pressed) {
         if (bdi->kind == kThemePushButton) {
@@ -2118,6 +2117,7 @@ QMacStyle::QMacStyle()
     //d->nsscroller = [[NSScroller alloc] init];
     d->horizontalScroller = [[NSScroller alloc] initWithFrame:NSMakeRect(0, 0, 200, 20)];
     d->verticalScroller = [[NSScroller alloc] initWithFrame:NSMakeRect(0, 0, 20, 200)];
+    
     d->indicatorBranchButtonCell = nil;
 }
 
@@ -3105,13 +3105,30 @@ void qt_mac_fill_background(QPainter *painter, const QRegion &rgn, const QBrush 
         return icon.pixmap(qt_getWindow(widget), QSize(size, size));
     }
     
-    void QMacStyle::setWidgetSizePolicy(const QWidget *widget, WidgetSizePolicy policy)
+    /*void QMacStyle::setFocusRectPolicy(QWidget *w, FocusRectPolicy policy)
     {
-        QWidget *wadget = const_cast<QWidget *>(widget);
-        wadget->setAttribute(Qt::WA_MacNormalSize, policy == SizeLarge);
-        wadget->setAttribute(Qt::WA_MacSmallSize, policy == SizeSmall);
-        wadget->setAttribute(Qt::WA_MacMiniSize, policy == SizeMini);
-    }
+         switch (policy) {
+             case FocusDefault:
+             break;
+             case FocusEnabled:
+             case FocusDisabled:
+             w->setAttribute(Qt::WA_MacShowFocusRect, policy == FocusEnabled);
+             break;
+         }
+     }
+     
+     QMacStyle::FocusRectPolicy QMacStyle::focusRectPolicy(const QWidget *w)
+     {
+         return w->testAttribute(Qt::WA_MacShowFocusRect) ? FocusEnabled : FocusDisabled;
+     }*/
+     
+     void QMacStyle::setWidgetSizePolicy(const QWidget *widget, WidgetSizePolicy policy)
+     {
+     QWidget *wadget = const_cast<QWidget *>(widget);
+         wadget->setAttribute(Qt::WA_MacNormalSize, policy == SizeLarge);
+         wadget->setAttribute(Qt::WA_MacSmallSize, policy == SizeSmall);
+         wadget->setAttribute(Qt::WA_MacMiniSize, policy == SizeMini);
+     }
     
     QMacStyle::WidgetSizePolicy QMacStyle::widgetSizePolicy(const QWidget *widget, const QStyleOption *opt)
     {
@@ -3305,60 +3322,32 @@ void qt_mac_fill_background(QPainter *painter, const QRegion &rgn, const QBrush 
                 }
                 break;
             case PE_IndicatorMenuCheckMark: {
-                if (!(opt->state & State_On))
-                    break;
-                QColor pc;
-                if (opt->state & State_Selected)
-                    pc = opt->palette.highlightedText().color();
-                else
-                    pc = opt->palette.text().color();
-                QCFType<CGColorRef> checkmarkColor = CGColorCreateGenericRGB(static_cast<CGFloat>(pc.redF()),
-                                                                             static_cast<CGFloat>(pc.greenF()),
-                                                                             static_cast<CGFloat>(pc.blueF()),
-                                                                             static_cast<CGFloat>(pc.alphaF()));
-                // kCTFontUIFontSystem and others give the same result
-                // as kCTFontUIFontMenuItemMark. However, the latter is
-                // more reminiscent to HITheme's kThemeMenuItemMarkFont.
-                // See also the font for small- and mini-sized widgets,
-                // where we end up using the generic system font type.
-                const CTFontUIFontType fontType = (opt->state & State_Mini) ? kCTFontUIFontMiniSystem :
-                (opt->state & State_Small) ? kCTFontUIFontSmallSystem :
-                kCTFontUIFontMenuItemMark;
-                // Similarly for the font size, where there is a small difference
-                // between regular combobox and item view items, and and menu items.
-                // However, we ignore any difference for small- and mini-sized widgets.
-                const CGFloat fontSize = fontType == kCTFontUIFontMenuItemMark ? opt->fontMetrics.height() : 0.0;
-                QCFType<CTFontRef> checkmarkFont = CTFontCreateUIFontForLanguage(fontType, fontSize, NULL);
+                const int checkw = 8;
+                const int checkh = 8;
+                const int xoff = qMax(0, (opt->rect.width() - checkw) / 2);
+                const int yoff = qMax(0, (opt->rect.width() - checkh) / 2);
+                const int x1 = xoff + opt->rect.x();
+                const int y1 = yoff + opt->rect.y() + checkw/2;
+                const int x2 = xoff + opt->rect.x() + checkw/4;
+                const int y2 = yoff + opt->rect.y() + checkh;
+                const int x3 = xoff + opt->rect.x() + checkw;
+                const int y3 = yoff + opt->rect.y();
                 
-                CGContextSaveGState(cg);
-                CGContextSetShouldSmoothFonts(cg, NO); // Same as HITheme and Cocoa menu checkmarks
-                
-                // Baseline alignment tweaks for QComboBox and QMenu
-                const CGFloat vOffset = (opt->state & State_Mini) ? 0.0 :
-                (opt->state & State_Small) ? 1.0 :
-                0.75;
-                
-                CGContextTranslateCTM(cg, 0, opt->rect.bottom());
-                CGContextScaleCTM(cg, 1, -1);
-                // Translate back to the original position and add rect origin and offset
-                CGContextTranslateCTM(cg, opt->rect.x(), vOffset);
-                
-                // CTFont has severe difficulties finding the checkmark character among its
-                // glyphs. Fortunately, CTLine knows its ways inside the Cocoa labyrinth.
-                static const CFStringRef keys[] = { kCTFontAttributeName, kCTForegroundColorAttributeName };
-                static const int numValues = sizeof(keys) / sizeof(keys[0]);
-                const CFTypeRef values[] = { (CFTypeRef)checkmarkFont,  (CFTypeRef)checkmarkColor };
-                Q_STATIC_ASSERT((sizeof(values) / sizeof(values[0])) == numValues);
-                QCFType<CFDictionaryRef> attributes = CFDictionaryCreate(kCFAllocatorDefault, (const void **)keys, (const void **)values,
-                                                                         numValues, NULL, NULL);
-                // U+2713: CHECK MARK
-                QCFType<CFAttributedStringRef> checkmarkString = CFAttributedStringCreate(kCFAllocatorDefault, (CFStringRef)@"\u2713", attributes);
-                QCFType<CTLineRef> line = CTLineCreateWithAttributedString(checkmarkString);
-                
-                CTLineDraw((CTLineRef)line, cg);
-                CGContextFlush(cg); // CTLineDraw's documentation says it doesn't flush
-                
-                CGContextRestoreGState(cg);
+                QVector<QLineF> a(2);
+                a << QLineF(x1, y1, x2, y2);
+                a << QLineF(x2, y2, x3, y3);
+                if (opt->palette.currentColorGroup() == QPalette::Active) {
+                    if (opt->state & State_On)
+                        p->setPen(QPen(opt->palette.highlightedText().color(), 3));
+                    else
+                        p->setPen(QPen(opt->palette.text().color(), 3));
+                } else {
+                    p->setPen(QPen(QColor(100, 100, 100), 3));
+                }
+                p->save();
+                p->setRenderHint(QPainter::Antialiasing);
+                p->drawLines(a);
+                p->restore();
                 break; }
             case PE_IndicatorViewItemCheck:
             case PE_IndicatorRadioButton:
@@ -3597,7 +3586,7 @@ void qt_mac_fill_background(QPainter *painter, const QRegion &rgn, const QBrush 
         QWindow *window = w && w->window() ? w->window()->windowHandle() :
         QStyleHelper::styleObjectWindow(opt->styleObject);
         const_cast<QMacStylePrivate *>(d)->resolveCurrentNSView(window);
-        const bool usingYosemiteOrLater = QOperatingSystemVersion::current() >= QOperatingSystemVersion::OSXYosemite;
+        const bool usingYosemiteOrLater = QSysInfo::MacintoshVersion >= QSysInfo::MV_10_10;
         switch (ce) {
             case CE_HeaderSection:
                 if (const QStyleOptionHeader *header = qstyleoption_cast<const QStyleOptionHeader *>(opt)) {
@@ -3989,7 +3978,7 @@ void qt_mac_fill_background(QPainter *painter, const QRegion &rgn, const QBrush 
                     bool hasIcon = !btn.icon.isNull();
                     bool hasText = !btn.text.isEmpty();
                     
-                    if (!hasMenu && QOperatingSystemVersion::current() >= QOperatingSystemVersion::OSXYosemite) {
+                    if (!hasMenu && QSysInfo::QSysInfo::MacintoshVersion >= QSysInfo::MV_10_10) {
                         if (tds == kThemeStatePressed
                             || (tds == kThemeStateActive
                                 && ((btn.features & QStyleOptionButton::DefaultButton && !d->autoDefaultButton)
@@ -4094,9 +4083,8 @@ void qt_mac_fill_background(QPainter *painter, const QRegion &rgn, const QBrush 
                     QStyleOptionComboBox comboCopy = *cb;
                     comboCopy.direction = Qt::LeftToRight;
                     if (opt->state & QStyle::State_Small)
-                        comboCopy.rect.translate(0, w ? 0 : (QOperatingSystemVersion::current() >= QOperatingSystemVersion::OSXYosemite ? 0 : -2)); // Supports Qt Quick Controls
-                    else if (QOperatingSystemVersion::current() >= QOperatingSystemVersion::OSXMavericks
-                             && QOperatingSystemVersion::current() < QOperatingSystemVersion::OSXYosemite)
+                        comboCopy.rect.translate(0, w ? 0 : (QSysInfo::macVersion() >= QSysInfo::MV_10_10 ? 0 : -2)); // Supports Qt Quick Controls
+                    else if (QSysInfo::macVersion() == QSysInfo::MV_10_9)
                         comboCopy.rect.translate(0, 1);
                     QCommonStyle::drawControl(CE_ComboBoxLabel, &comboCopy, p, w);
                 }
@@ -4444,27 +4432,61 @@ void qt_mac_fill_background(QPainter *painter, const QRegion &rgn, const QBrush 
                         p->setPen(mi->palette.buttonText().color());
                     
                     if (mi->checked) {
-                        QStyleOption checkmarkOpt;
-                        checkmarkOpt.initFrom(w);
-                        
-                        const int mw = checkcol + macItemFrame;
-                        const int mh = contentRect.height() + macItemFrame;
-                        const int xp = contentRect.x() + macItemFrame;
-                        checkmarkOpt.rect = QRect(xp, contentRect.y() - checkmarkOpt.fontMetrics.descent(), mw, mh);
-                        
-                        checkmarkOpt.state |= State_On; // Always on. Never rendered when off.
-                        checkmarkOpt.state.setFlag(State_Selected, active);
-                        checkmarkOpt.state.setFlag(State_Enabled, enabled);
+                        // Use the HIThemeTextInfo foo to draw the check mark correctly, if we do it,
+                        // we somehow need to use a special encoding as it doesn't look right with our
+                        // drawText().
+                        p->save();
+                        CGContextSetShouldAntialias(cg, true);
+                        CGContextSetShouldSmoothFonts(cg, true);
+                        QColor textColor = p->pen().color();
+                        CGFloat colorComp[] = { static_cast<CGFloat>(textColor.redF()), static_cast<CGFloat>(textColor.greenF()),
+                            static_cast<CGFloat>(textColor.blueF()), static_cast<CGFloat>(textColor.alphaF()) };
+                        CGContextSetFillColorSpace(cg, qt_mac_genericColorSpace());
+                        CGContextSetFillColor(cg, colorComp);
+                        HIThemeTextInfo tti;
+                        tti.version = qt_mac_hitheme_version;
+                        tti.state = tds;
+                        if (active && enabled)
+                            tti.state = kThemeStatePressed;
+                        switch (widgetSize) {
+                            case QAquaSizeUnknown:
+                            case QAquaSizeLarge:
+                                tti.fontID = kThemeMenuItemMarkFont;
+                                break;
+                            case QAquaSizeSmall:
+                                tti.fontID = kThemeSmallSystemFont;
+                                break;
+                            case QAquaSizeMini:
+                                tti.fontID = kThemeMiniSystemFont;
+                                break;
+                        }
+                        tti.horizontalFlushness = kHIThemeTextHorizontalFlushLeft;
+                        tti.verticalFlushness = kHIThemeTextVerticalFlushCenter;
+                        tti.options = kHIThemeTextBoxOptionNone;
+                        tti.truncationPosition = kHIThemeTextTruncationNone;
+                        tti.truncationMaxLines = 1;
+                        QCFString checkmark;
+#if 0
+                        if (mi->checkType == QStyleOptionMenuItem::Exclusive)
+                            checkmark = QString(QChar(kDiamondUnicode));
+                        else
+#endif
+                            checkmark = QString(QChar(kCheckUnicode));
+                        int mw = checkcol + macItemFrame;
+                        int mh = contentRect.height() - 2 * macItemFrame;
+                        int xp = contentRect.x();
+                        xp += macItemFrame;
+                        CGFloat outWidth, outHeight, outBaseline;
+                        HIThemeGetTextDimensions(checkmark, 0, &tti, &outWidth, &outHeight,
+                                                 &outBaseline);
                         if (widgetSize == QAquaSizeMini)
-                            checkmarkOpt.state |= State_Mini;
-                        else if (widgetSize == QAquaSizeSmall)
-                            checkmarkOpt.state |= State_Small;
-                        
-                        // We let drawPrimitive(PE_IndicatorMenuCheckMark) pick the right color
-                        checkmarkOpt.palette.setColor(QPalette::HighlightedText, p->pen().color());
-                        checkmarkOpt.palette.setColor(QPalette::Text, p->pen().color());
-                        
-                        proxy()->drawPrimitive(PE_IndicatorMenuCheckMark, &checkmarkOpt, p, w);
+                            outBaseline += 1;
+                        QRect r(xp, contentRect.y(), mw, mh);
+                        r.translate(0, p->fontMetrics().ascent() - int(outBaseline) + 1);
+                        HIRect bounds = qt_hirectForQRect(r);
+                        HIThemeDrawTextBox(checkmark, &bounds, &tti,
+                                           cg, kHIThemeOrientationNormal);
+                        p->restore();
                     }
                     if (!mi->icon.isNull()) {
                         QIcon::Mode mode = (mi->state & State_Enabled) ? QIcon::Normal
@@ -5270,7 +5292,7 @@ void qt_mac_fill_background(QPainter *painter, const QRegion &rgn, const QBrush 
         QWindow *window = widget && widget->window() ? widget->window()->windowHandle() :
         QStyleHelper::styleObjectWindow(opt->styleObject);
         const_cast<QMacStylePrivate *>(d)->resolveCurrentNSView(window);
-        const bool usingYosemiteOrLater = QOperatingSystemVersion::current() >= QOperatingSystemVersion::OSXYosemite;
+        const bool usingYosemiteOrLater = QSysInfo::MacintoshVersion >= QSysInfo::MV_10_10;
         switch (cc) {
             case CC_Slider:
             case CC_ScrollBar:
@@ -5915,7 +5937,7 @@ void qt_mac_fill_background(QPainter *painter, const QRegion &rgn, const QBrush 
                             drawToolbarButtonArrow(tb->rect, tds, cg);
                         }
                         if (tb->state & State_On) {
-                            if (QOperatingSystemVersion::current() >= QOperatingSystemVersion::OSXYosemite) {
+                            if (QSysInfo::MacintoshVersion >= QSysInfo::MV_10_10) {
                                 QWindow *window = 0;
                                 if (widget && widget->window())
                                     window = widget->window()->windowHandle();
@@ -6279,7 +6301,7 @@ void qt_mac_fill_background(QPainter *painter, const QRegion &rgn, const QBrush 
                     switch (sc) {
                         case SC_ComboBoxEditField:{
                             ret = QMacStylePrivate::comboboxEditBounds(combo->rect, bdi);
-                            if (QOperatingSystemVersion::current() >= QOperatingSystemVersion::OSXYosemite)
+                            if (QSysInfo::MacintoshVersion >= QSysInfo::MV_10_10)
                                 ret.setHeight(ret.height() - 1);
                             break; }
                         case SC_ComboBoxArrow:{
@@ -6738,16 +6760,19 @@ void qt_mac_fill_background(QPainter *painter, const QRegion &rgn, const QBrush 
             case CT_ComboBox: {
                 sz.rwidth() += 50;
                 const QStyleOptionComboBox *cb = qstyleoption_cast<const QStyleOptionComboBox *>(opt);
-                if (QOperatingSystemVersion::current() < QOperatingSystemVersion::OSXYosemite || (cb && !cb->editable))
+                if (QSysInfo::MacintoshVersion < QSysInfo::MV_10_10 || (cb && !cb->editable))
                     sz.rheight() += 2;
                 break;
             }
             case CT_Menu: {
-                QStyleHintReturnMask menuMask;
-                QStyleOption myOption = *opt;
-                myOption.rect.setSize(sz);
-                if (proxy()->styleHint(SH_Menu_Mask, &myOption, widget, &menuMask)) {
-                    sz = menuMask.region.boundingRect().size();
+                if (proxy() == this) {
+                    sz = csz;
+                } else {
+                    QStyleHintReturnMask menuMask;
+                    QStyleOption myOption = *opt;
+                    myOption.rect.setSize(sz);
+                    if (proxy()->styleHint(SH_Menu_Mask, &myOption, widget, &menuMask))
+                        sz = menuMask.region.boundingRect().size();
                 }
                 break; }
             case CT_HeaderSection:{
