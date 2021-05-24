@@ -2115,7 +2115,9 @@ QMacStyle::QMacStyle()
                                                  name:NSPreferredScrollerStyleDidChangeNotification
                                                object:nil];
     
-    d->nsscroller = [[NSScroller alloc] init];
+    //d->nsscroller = [[NSScroller alloc] init];
+    d->horizontalScroller = [[NSScroller alloc] initWithFrame:NSMakeRect(0, 0, 200, 20)];
+    d->verticalScroller = [[NSScroller alloc] initWithFrame:NSMakeRect(0, 0, 20, 200)];
     d->indicatorBranchButtonCell = nil;
 }
 
@@ -2124,7 +2126,9 @@ QMacStyle::~QMacStyle()
     Q_D(QMacStyle);
     QMacAutoReleasePool pool;
     
-    [reinterpret_cast<NSScroller*>(d->nsscroller) release];
+    //[reinterpret_cast<NSScroller*>(d->nsscroller) release];
+    [d->horizontalScroller release];
+    [d->verticalScroller release];
     
     NotificationReceiver *receiver = static_cast<NotificationReceiver *>(d->receiver);
     [[NSNotificationCenter defaultCenter] removeObserver:receiver];
@@ -5434,7 +5438,8 @@ void qt_mac_fill_background(QPainter *painter, const QRegion &rgn, const QBrush 
                         
                         [NSGraphicsContext setCurrentContext:[NSGraphicsContext
                                                               graphicsContextWithGraphicsPort:(CGContextRef)cg flipped:NO]];
-                        NSScroller *scroller = reinterpret_cast<NSScroller*>(d->nsscroller);
+                        //NSScroller *scroller = reinterpret_cast<NSScroller*>(d->nsscroller);
+                        NSScroller *scroller = isHorizontal ? d->horizontalScroller : d-> verticalScroller;
                         [scroller initWithFrame:NSMakeRect(0, 0, slider->rect.width(), slider->rect.height())];
                         // mac os behaviour: as soon as one color channel is >= 128,
                         // the bg is considered bright, scroller is dark
