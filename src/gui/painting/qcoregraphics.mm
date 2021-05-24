@@ -1,31 +1,37 @@
 /****************************************************************************
  **
- ** Copyright (C) 2016 The Qt Company Ltd.
- ** Contact: http://www.qt.io/licensing/
+ ** Copyright (C) 2017 The Qt Company Ltd.
+ ** Contact: https://www.qt.io/licensing/
  **
  ** This file is part of the QtGui module of the Qt Toolkit.
  **
- ** $QT_BEGIN_LICENSE:LGPL21$
+ ** $QT_BEGIN_LICENSE:LGPL$
  ** Commercial License Usage
  ** Licensees holding valid commercial Qt licenses may use this file in
  ** accordance with the commercial license agreement provided with the
  ** Software or, alternatively, in accordance with the terms contained in
  ** a written agreement between you and The Qt Company. For licensing terms
- ** and conditions see http://www.qt.io/terms-conditions. For further
- ** information use the contact form at http://www.qt.io/contact-us.
+ ** and conditions see https://www.qt.io/terms-conditions. For further
+ ** information use the contact form at https://www.qt.io/contact-us.
  **
  ** GNU Lesser General Public License Usage
  ** Alternatively, this file may be used under the terms of the GNU Lesser
- ** General Public License version 2.1 or version 3 as published by the Free
- ** Software Foundation and appearing in the file LICENSE.LGPLv21 and
- ** LICENSE.LGPLv3 included in the packaging of this file. Please review the
- ** following information to ensure the GNU Lesser General Public License
- ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
- ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+ ** General Public License version 3 as published by the Free Software
+ ** Foundation and appearing in the file LICENSE.LGPL3 included in the
+ ** packaging of this file. Please review the following information to
+ ** ensure the GNU Lesser General Public License version 3 requirements
+ ** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
  **
- ** As a special exception, The Qt Company gives you certain additional
- ** rights. These rights are described in The Qt Company LGPL Exception
- ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+ ** GNU General Public License Usage
+ ** Alternatively, this file may be used under the terms of the GNU
+ ** General Public License version 2.0 or (at your option) the GNU General
+ ** Public license version 3 or any later version approved by the KDE Free
+ ** Qt Foundation. The licenses are as published by the Free Software
+ ** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+ ** included in the packaging of this file. Please review the following
+ ** information to ensure the GNU General Public License requirements will
+ ** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+ ** https://www.gnu.org/licenses/gpl-3.0.html.
  **
  ** $QT_END_LICENSE$
  **
@@ -66,17 +72,8 @@ CGImageRef qt_mac_toCGImageMask(const QImage &image)
                              image.bytesPerLine(), dataProvider, NULL, false);
 }
 
-OSStatus qt_mac_drawCGImage(CGContextRef inContext, const CGRect *inBounds, CGImageRef inImage)
+void qt_mac_drawCGImage(CGContextRef inContext, const CGRect *inBounds, CGImageRef inImage)
 {
-    // Verbatim copy if HIViewDrawCGImage (as shown on Carbon-Dev)
-    OSStatus err = noErr;
-    
-#ifdef Q_OS_MACOS
-    require_action(inContext != NULL, InvalidContext, err = paramErr);
-    require_action(inBounds != NULL, InvalidBounds, err = paramErr);
-    require_action(inImage != NULL, InvalidImage, err = paramErr);
-#endif
-    
     CGContextSaveGState( inContext );
     CGContextTranslateCTM (inContext, 0, inBounds->origin.y + CGRectGetMaxY(*inBounds));
     CGContextScaleCTM(inContext, 1, -1);
@@ -84,13 +81,6 @@ OSStatus qt_mac_drawCGImage(CGContextRef inContext, const CGRect *inBounds, CGIm
     CGContextDrawImage(inContext, *inBounds, inImage);
     
     CGContextRestoreGState(inContext);
-    
-#ifdef Q_OS_MACOS
-InvalidImage:
-InvalidBounds:
-InvalidContext:
-#endif
-    return err;
 }
 
 QImage qt_mac_toQImage(CGImageRef image)
@@ -106,29 +96,6 @@ QImage qt_mac_toQImage(CGImageRef image)
 }
 
 #ifdef Q_OS_MACOS
-
-QT_END_NAMESPACE
-
-@interface NSGraphicsContext (QtAdditions)
-
-+ (NSGraphicsContext *)qt_graphicsContextWithCGContext:(CGContextRef)graphicsPort flipped:(BOOL)initialFlippedState;
-
-@end
-
-@implementation NSGraphicsContext (QtAdditions)
-
-+ (NSGraphicsContext *)qt_graphicsContextWithCGContext:(CGContextRef)graphicsPort flipped:(BOOL)initialFlippedState
-{
-#if QT_MAC_PLATFORM_SDK_EQUAL_OR_ABOVE(__MAC_10_10, __IPHONE_NA)
-    if (QT_PREPEND_NAMESPACE(QOperatingSystemVersion::current()) >= QT_PREPEND_NAMESPACE(QOperatingSystemVersion::OSXYosemite))
-        return [self graphicsContextWithCGContext:graphicsPort flipped:initialFlippedState];
-#endif
-    return [self graphicsContextWithGraphicsPort:graphicsPort flipped:initialFlippedState];
-}
-
-@end
-
-QT_BEGIN_NAMESPACE
 
 static NSImage *qt_mac_cgimage_to_nsimage(CGImageRef image)
 {
@@ -156,8 +123,10 @@ NSImage *qt_mac_create_nsimage(const QIcon &icon, int defaultSize)
     QList<QSize> availableSizes = icon.availableSizes();
     if (availableSizes.isEmpty() && defaultSize > 0)
         availableSizes << QSize(defaultSize, defaultSize);
-    foreach (QSize size, availableSizes) {
+    for (QSize size : qAsConst(availableSizes)) {
         QPixmap pm = icon.pixmap(size);
+        if (pm.isNull())
+            continue;
         QImage image = pm.toImage();
         CGImageRef cgImage = qt_mac_toCGImage(image);
         NSBitmapImageRep *imageRep = [[NSBitmapImageRep alloc] initWithCGImage:cgImage];
@@ -178,7 +147,10 @@ QPixmap qt_mac_toQPixmap(const NSImage *image, const QSizeF &size)
     QMacCGContext ctx(&pixmap);
     if (!ctx)
         return QPixmap();
-    NSGraphicsContext *gc = [NSGraphicsContext qt_graphicsContextWithCGContext:ctx flipped:YES];
+    
+    //NSGraphicsContext *gc = [NSGraphicsContext graphicsContextWithCGContext:ctx flipped:YES];
+    NSGraphicsContext *gc = [NSGraphicsContext graphicsContextWithGraphicsPort:ctx flipped:YES];
+    
     if (!gc)
         return QPixmap();
     [NSGraphicsContext saveGraphicsState];
@@ -496,6 +468,8 @@ QMacCGContext::QMacCGContext(QPaintDevice *paintDevice) : context(0)
     context = CGBitmapContextCreate(image->bits(), image->width(), image->height(),
                                     8, image->bytesPerLine(), colorspace, flags);
     CGContextTranslateCTM(context, 0, image->height());
+    const qreal devicePixelRatio = paintDevice->devicePixelRatioF();
+    CGContextScaleCTM(context, devicePixelRatio, devicePixelRatio);
     CGContextScaleCTM(context, 1, -1);
 }
 
