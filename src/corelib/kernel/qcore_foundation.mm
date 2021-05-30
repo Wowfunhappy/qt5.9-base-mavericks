@@ -486,10 +486,10 @@ QTimeZone QTimeZone::fromNSTimeZone(const NSTimeZone *timeZone)
 
     \sa fromNSTimeZone()
 */
-NSTimeZone *QTimeZone::toNSTimeZone() const
-{
-    return [static_cast<NSTimeZone *>(toCFTimeZone()) autorelease];
-}
+//NSTimeZone *QTimeZone::toNSTimeZone() const
+//{
+//    return [static_cast<NSTimeZone *>(toCFTimeZone()) autorelease];
+//}
 #endif
 
 // ----------------------------------------------------------------------------

@@ -65,11 +65,11 @@ CGImageRef qt_mac_toCGImageMask(const QImage &image)
 {
     static const auto deleter = [](void *image, const void *, size_t) { delete static_cast<QImage *>(image); };
     QCFType<CGDataProviderRef> dataProvider =
-            CGDataProviderCreateWithData(new QImage(image), image.bits(),
-                                                    image.byteCount(), deleter);
-
+    CGDataProviderCreateWithData(new QImage(image), image.bits(),
+                                 image.byteCount(), deleter);
+    
     return CGImageMaskCreate(image.width(), image.height(), 8, image.depth(),
-                              image.bytesPerLine(), dataProvider, NULL, false);
+                             image.bytesPerLine(), dataProvider, NULL, false);
 }
 
 void qt_mac_drawCGImage(CGContextRef inContext, const CGRect *inBounds, CGImageRef inImage)
@@ -86,7 +86,7 @@ void qt_mac_drawCGImage(CGContextRef inContext, const CGRect *inBounds, CGImageR
 QImage qt_mac_toQImage(CGImageRef image)
 {
     const size_t w = CGImageGetWidth(image),
-                 h = CGImageGetHeight(image);
+    h = CGImageGetHeight(image);
     QImage ret(w, h, QImage::Format_ARGB32_Premultiplied);
     ret.fill(Qt::transparent);
     CGRect rect = CGRectMake(0, 0, w, h);
@@ -147,7 +147,10 @@ QPixmap qt_mac_toQPixmap(const NSImage *image, const QSizeF &size)
     QMacCGContext ctx(&pixmap);
     if (!ctx)
         return QPixmap();
-    NSGraphicsContext *gc = [NSGraphicsContext graphicsContextWithCGContext:ctx flipped:YES];
+    
+    //NSGraphicsContext *gc = [NSGraphicsContext graphicsContextWithCGContext:ctx flipped:YES];
+    NSGraphicsContext *gc = [NSGraphicsContext graphicsContextWithGraphicsPort:ctx flipped:YES];
+    
     if (!gc)
         return QPixmap();
     [NSGraphicsContext saveGraphicsState];
@@ -324,14 +327,14 @@ static CGColorSpaceRef qt_mac_displayColorSpace(const QWindow *window)
     } else {
         displayID = CGMainDisplayID();
         /*
-        ### get correct display
-        const QRect &qrect = window->geometry();
-        CGRect rect = CGRectMake(qrect.x(), qrect.y(), qrect.width(), qrect.height());
-        CGDisplayCount throwAway;
-        CGDisplayErr dErr = CGGetDisplaysWithRect(rect, 1, &displayID, &throwAway);
-        if (dErr != kCGErrorSuccess)
-            return macDisplayColorSpace(0); // fall back on main display
-        */
+         ### get correct display
+         const QRect &qrect = window->geometry();
+         CGRect rect = CGRectMake(qrect.x(), qrect.y(), qrect.width(), qrect.height());
+         CGDisplayCount throwAway;
+         CGDisplayErr dErr = CGGetDisplaysWithRect(rect, 1, &displayID, &throwAway);
+         if (dErr != kCGErrorSuccess)
+         return macDisplayColorSpace(0); // fall back on main display
+         */
     }
     if ((colorSpace = m_displayColorSpaceHash.value(displayID)))
         return colorSpace;
@@ -463,7 +466,7 @@ QMacCGContext::QMacCGContext(QPaintDevice *paintDevice) : context(0)
     flags |= kCGBitmapByteOrder32Host;
 
     context = CGBitmapContextCreate(image->bits(), image->width(), image->height(),
-                                8, image->bytesPerLine(), colorspace, flags);
+                                    8, image->bytesPerLine(), colorspace, flags);
     CGContextTranslateCTM(context, 0, image->height());
     const qreal devicePixelRatio = paintDevice->devicePixelRatioF();
     CGContextScaleCTM(context, devicePixelRatio, devicePixelRatio);
@@ -487,54 +490,54 @@ QMacCGContext::QMacCGContext(QPainter *painter) : context(0)
 
     int devType = painter->device()->devType();
     if (paintEngine->type() == QPaintEngine::Raster
-            && (devType == QInternal::Widget ||
-                devType == QInternal::Pixmap ||
-                devType == QInternal::Image)) {
-
-        CGColorSpaceRef colorspace = qt_mac_colorSpaceForDeviceType(paintEngine->paintDevice());
-        uint flags = kCGImageAlphaPremultipliedFirst;
+        && (devType == QInternal::Widget ||
+            devType == QInternal::Pixmap ||
+            devType == QInternal::Image)) {
+            
+            CGColorSpaceRef colorspace = qt_mac_colorSpaceForDeviceType(paintEngine->paintDevice());
+            uint flags = kCGImageAlphaPremultipliedFirst;
 #ifdef kCGBitmapByteOrder32Host //only needed because CGImage.h added symbols in the minor version
-        flags |= kCGBitmapByteOrder32Host;
+            flags |= kCGBitmapByteOrder32Host;
 #endif
-        const QImage *image = static_cast<const QImage *>(paintEngine->paintDevice());
-
-        context = CGBitmapContextCreate((void *)image->bits(), image->width(), image->height(),
-                                        8, image->bytesPerLine(), colorspace, flags);
-
-        // Invert y axis
-        CGContextTranslateCTM(context, 0, image->height());
-        CGContextScaleCTM(context, 1, -1);
-
-        const qreal devicePixelRatio = image->devicePixelRatio();
-
-        if (devType == QInternal::Widget) {
-            // Set the clip rect which is an intersection of the system clip
-            // and the painter clip. To make matters more interesting these
-            // are in device pixels and device-independent pixels, respectively.
-            QRegion clip = painter->paintEngine()->systemClip(); // get system clip in device pixels
-            QTransform native = painter->deviceTransform();      // get device transform. dx/dy is in device pixels
-
-            if (painter->hasClipping()) {
-                QRegion r = painter->clipRegion();               // get painter clip, which is in device-independent pixels
-                qt_mac_scale_region(&r, devicePixelRatio); // scale painter clip to device pixels
-                r.translate(native.dx(), native.dy());
-                if (clip.isEmpty())
-                    clip = r;
-                else
-                    clip &= r;
+            const QImage *image = static_cast<const QImage *>(paintEngine->paintDevice());
+            
+            context = CGBitmapContextCreate((void *)image->bits(), image->width(), image->height(),
+                                            8, image->bytesPerLine(), colorspace, flags);
+            
+            // Invert y axis
+            CGContextTranslateCTM(context, 0, image->height());
+            CGContextScaleCTM(context, 1, -1);
+            
+            const qreal devicePixelRatio = image->devicePixelRatio();
+            
+            if (devType == QInternal::Widget) {
+                // Set the clip rect which is an intersection of the system clip
+                // and the painter clip. To make matters more interesting these
+                // are in device pixels and device-independent pixels, respectively.
+                QRegion clip = painter->paintEngine()->systemClip(); // get system clip in device pixels
+                QTransform native = painter->deviceTransform();      // get device transform. dx/dy is in device pixels
+                
+                if (painter->hasClipping()) {
+                    QRegion r = painter->clipRegion();               // get painter clip, which is in device-independent pixels
+                    qt_mac_scale_region(&r, devicePixelRatio); // scale painter clip to device pixels
+                    r.translate(native.dx(), native.dy());
+                    if (clip.isEmpty())
+                        clip = r;
+                    else
+                        clip &= r;
+                }
+                qt_mac_clip_cg(context, clip, 0); // clip in device pixels
+                
+                // Scale the context so that painting happens in device-independent pixels
+                CGContextScaleCTM(context, devicePixelRatio, devicePixelRatio);
+                CGContextTranslateCTM(context, native.dx() / devicePixelRatio, native.dy() / devicePixelRatio);
+            } else {
+                // Scale to paint in device-independent pixels
+                CGContextScaleCTM(context, devicePixelRatio, devicePixelRatio);
             }
-            qt_mac_clip_cg(context, clip, 0); // clip in device pixels
-
-            // Scale the context so that painting happens in device-independent pixels
-            CGContextScaleCTM(context, devicePixelRatio, devicePixelRatio);
-            CGContextTranslateCTM(context, native.dx() / devicePixelRatio, native.dy() / devicePixelRatio);
         } else {
-            // Scale to paint in device-independent pixels
-            CGContextScaleCTM(context, devicePixelRatio, devicePixelRatio);
+            qDebug() << "QMacCGContext:: Unsupported painter devtype type" << devType;
         }
-    } else {
-        qDebug() << "QMacCGContext:: Unsupported painter devtype type" << devType;
-    }
 }
 
 QT_END_NAMESPACE
