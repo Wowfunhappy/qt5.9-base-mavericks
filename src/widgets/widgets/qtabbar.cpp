@@ -102,7 +102,6 @@ inline static bool verticalTabs(QTabBar::Shape shape)
 
 void QTabBarPrivate::updateMacBorderMetrics()
 {
-#if defined(Q_OS_OSX)
     Q_Q(QTabBar);
     // Extend the unified title and toolbar area to cover the tab bar iff
     // 1) the tab bar is in document mode
@@ -140,7 +139,6 @@ void QTabBarPrivate::updateMacBorderMetrics()
         return;
     typedef void (*SetContentBorderAreaEnabledFunction)(QWindow *window, quintptr identifier, bool enable);
     (reinterpret_cast<SetContentBorderAreaEnabledFunction>(function))(q->window()->windowHandle(), identifier, q->isVisible());
-#endif
 }
 
 /*!
@@ -180,6 +178,11 @@ void QTabBarPrivate::initBasicStyleOption(QStyleOptionTab *option, int tabIndex)
 
     if (tab.textColor.isValid())
         option->palette.setColor(q->foregroundRole(), tab.textColor);
+    else if (isCurrent && !documentMode
+            && (QSysInfo::MacintoshVersion < QSysInfo::MV_10_10 || q->isActiveWindow())
+             && q->style()->objectName() == QStringLiteral("macintosh")) {
+        option->palette.setColor(QPalette::WindowText, Qt::white);
+    }
     option->icon = tab.icon;
     option->iconSize = q->iconSize();  // Will get the default value then.
 
