@@ -235,9 +235,11 @@ QCoreTextFontEngine::QCoreTextFontEngine(CTFontRef font, const QFontDef &def)
     fontDef = def;
     transform = qt_transform_from_fontdef(fontDef);
     ctfont = font;
-    CFRetain(ctfont);
-    cgFont = CTFontCopyGraphicsFont(font, NULL);
-    init();
+    if (font) {
+        CFRetain(ctfont);
+        cgFont = CTFontCopyGraphicsFont(font, NULL);
+        init();
+    }
 }
 
 QCoreTextFontEngine::QCoreTextFontEngine(CGFontRef font, const QFontDef &def)
@@ -247,15 +249,17 @@ QCoreTextFontEngine::QCoreTextFontEngine(CGFontRef font, const QFontDef &def)
     transform = qt_transform_from_fontdef(fontDef);
     cgFont = font;
     // Keep reference count balanced
-    CFRetain(cgFont);
-    ctfont = CTFontCreateWithGraphicsFont(font, fontDef.pixelSize, &transform, NULL);
-    init();
+    if (font) {
+        CFRetain(cgFont);
+        ctfont = CTFontCreateWithGraphicsFont(font, fontDef.pixelSize, &transform, NULL);
+        init();
+    }
 }
 
 QCoreTextFontEngine::~QCoreTextFontEngine()
 {
-    CFRelease(cgFont);
-    CFRelease(ctfont);
+    if (cgFont) CFRelease(cgFont);
+    if (ctfont) CFRelease(ctfont);
 }
 
 void QCoreTextFontEngine::init()
