@@ -613,20 +613,66 @@ QStringList QCoreTextFontDatabase::fallbacksForFamily(const QString &family, QFo
     return fallbackLists[styleLookupKey.arg(styleHint)];
 }
 
+static void releaseFontData(void* info, const void* data, size_t size)
+{
+    Q_UNUSED(data);
+    Q_UNUSED(size);
+    delete (QByteArray*)info;
+}
+
+template <>
+CFArrayRef QCoreTextFontDatabaseEngineFactory<QCoreTextFontEngine>::createDescriptorArrayForDescriptor(CTFontDescriptorRef descriptor, const QString &fileName)
+{
+    Q_UNUSED(fileName)
+    CFMutableArrayRef array = CFArrayCreateMutable(kCFAllocatorDefault, 0, &kCFTypeArrayCallBacks);
+    CFArrayAppendValue(array, descriptor);
+    return array;
+}
+
+#ifndef QT_NO_FREETYPE
+template <>
+CFArrayRef QCoreTextFontDatabaseEngineFactory<QFontEngineFT>::createDescriptorArrayForDescriptor(CTFontDescriptorRef descriptor, const QString &fileName)
+{
+    CFMutableArrayRef array = CFArrayCreateMutable(kCFAllocatorDefault, 0, &kCFTypeArrayCallBacks);
+
+    // The physical font source URL (usually a local file or Qt resource) is only required for
+    // FreeType, when using non-system fonts, and needs some hackery to attach in a format
+    // agreeable to OSX.
+    if (!fileName.isEmpty()) {
+        QCFType<CFURLRef> fontURL;
+
+        if (fileName.startsWith(QLatin1String(":/"))) {
+            // QUrl::fromLocalFile() doesn't accept qrc pseudo-paths like ":/fonts/myfont.ttf".
+            // Therefore construct from QString with the qrc:// scheme -> "qrc:///fonts/myfont.ttf".
+            fontURL = QUrl(QStringLiteral("qrc://") + fileName.mid(1)).toCFURL();
+        } else {
+            // At this point we hope that filename is in a format that QUrl can handle.
+            fontURL = QUrl::fromLocalFile(fileName).toCFURL();
+        }
+
+        QCFType<CFMutableDictionaryRef> attributes = CFDictionaryCreateMutable(kCFAllocatorDefault, 1,
+            &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
+        CFDictionaryAddValue(attributes, kCTFontURLAttribute, fontURL);
+        descriptor = CTFontDescriptorCreateCopyWithAttributes(descriptor, attributes);
+    }
+
+    CFArrayAppendValue(array, descriptor);
+    return array;
+}
+#endif
+
 QStringList QCoreTextFontDatabase::addApplicationFont(const QByteArray &fontData, const QString &fileName)
 {
     QCFType<CFArrayRef> fonts;
 
     if (!fontData.isEmpty()) {
-        QCFType<CFDataRef> fontDataReference = fontData.toRawCFData();
-        if (QCFType<CTFontDescriptorRef> descriptor = CTFontManagerCreateFontDescriptorFromData(fontDataReference)) {
-            // There's no way to get the data back out of a font descriptor created with
-            // CTFontManagerCreateFontDescriptorFromData, so we attach the data manually.
-            NSDictionary *attributes = @{ kQtFontDataAttribute : [NSValue valueWithPointer:new QByteArray(fontData)] };
-            descriptor = CTFontDescriptorCreateCopyWithAttributes(descriptor, (CFDictionaryRef)attributes);
-            CFMutableArrayRef array = CFArrayCreateMutable(kCFAllocatorDefault, 0, &kCFTypeArrayCallBacks);
-            CFArrayAppendValue(array, descriptor);
-            fonts = array;
+        QByteArray* fontDataCopy = new QByteArray(fontData);
+        QCFType<CGDataProviderRef> dataProvider = CGDataProviderCreateWithData(fontDataCopy,
+                fontDataCopy->constData(), fontDataCopy->size(), releaseFontData);
+        if (QCFType<CGFontRef> cgFont = CGFontCreateWithDataProvider(dataProvider)) {
+            QCFType<CTFontRef> ctFont = CTFontCreateWithGraphicsFont(cgFont, 0.0, NULL, NULL);
+            QCFType<CTFontDescriptorRef> descriptor = CTFontCopyFontDescriptor(ctFont);
+            fonts = createDescriptorArrayForDescriptor(descriptor, fileName);
         }
     } else {
         QCFType<CFURLRef> fontURL = QUrl::fromLocalFile(fileName).toCFURL();
